@@ -1,0 +1,12 @@
+const assert = require('assert');
+const Queue = require('./queue');
+const q = new Queue();
+assert(q.isEmpty() && q.dequeue() === null && q.peek() === null);
+q.enqueue('a'); q.enqueue('b'); q.enqueue('c');
+assert.strictEqual(q.size(), 3);
+assert.strictEqual(q.peek(), 'a');
+assert.strictEqual(q.dequeue(), 'a');
+assert.deepStrictEqual(q.toArray(), ['b', 'c']);
+q.dequeue(); q.dequeue();
+assert(q.isEmpty() && q.tail === null);
+console.log('Queue tests passed');

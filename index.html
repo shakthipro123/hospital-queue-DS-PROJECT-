@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waiting Room · Hospital Queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+:root{--bg:#eaf0ee;--card:#fbfdfc;--ink:#14232b;--muted:#5b6d73;--line:#c9d6d2;--teal:#0f766e;--red:#c0321c;--board:#10262b;--amber:#f2b84b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:20px 16px 48px;display:grid;gap:20px}
+h1{font-size:1.5rem;margin:0}
+h2{font-size:1.05rem;margin:0 0 12px}
+.sub{color:var(--muted);margin:2px 0 0}
+.board{background:var(--board);color:#e8f3f0;border-radius:6px;padding:22px 24px;display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:space-between}
+.board .lbl{color:#9fbab4;font-size:.9rem}
+.token{font-size:3.6rem;font-weight:700;color:var(--amber);line-height:1}
+.board .who{font-size:1.4rem;font-weight:700}
+button{font:inherit;font-weight:700;border:0;border-radius:4px;padding:11px 18px;cursor:pointer;background:var(--teal);color:#fff}
+button.call{background:var(--amber);color:#2a1d00;font-size:1.05rem;padding:14px 24px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.grid{display:grid;grid-template-columns:300px 1fr;gap:20px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px}
+label{display:block;font-weight:700;margin:10px 0 4px}
+input[type=text]{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff}
+.chk{display:flex;gap:8px;align-items:center;margin:14px 0}
+.chk input{width:20px;height:20px;accent-color:var(--red)}
+.err{color:var(--red);min-height:1.4em;margin:8px 0 0}
+.lane{margin-bottom:18px}
+.lane h3{font-size:.95rem;margin:0 0 8px;display:flex;justify-content:space-between}
+.lane.em h3{color:var(--red)}
+.chain{display:flex;align-items:center;gap:0;overflow-x:auto;padding:4px 2px 10px}
+.pt{min-width:132px;background:#fff;border:2px solid var(--teal);border-radius:4px;padding:8px 10px}
+.em .pt{border-color:var(--red)}
+.pt b{display:block}
+.pt small{color:var(--muted)}
+.arrow{width:26px;height:2px;background:var(--muted);position:relative;flex:none}
+.arrow:after{content:"";position:absolute;right:-1px;top:-4px;border-left:7px solid var(--muted);border-top:5px solid transparent;border-bottom:5px solid transparent}
+.tag{font-size:.75rem;font-weight:700;color:var(--muted);display:block}
+.empty{color:var(--muted);padding:8px 0}
+ol{margin:0;padding-left:20px}
+li{margin:4px 0}
+.note{font-size:.9rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Waiting room</h1>
+    <p class="sub">A queue in action: first to arrive is first to be seen, unless it's an emergency.</p>
+  </header>
+
+  <section class="board" aria-live="polite">
+    <div>
+      <div class="lbl">Now serving</div>
+      <div class="token" id="nowToken">–</div>
+      <div class="who" id="nowName">No one yet</div>
+    </div>
+    <div>
+      <div class="lbl">Waiting</div>
+      <div class="token" id="waiting" style="color:#e8f3f0">0</div>
+    </div>
+    <button class="call" id="callBtn">Call next patient</button>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Register a patient</h2>
+      <label for="name">Patient name</label>
+      <input type="text" id="name" maxlength="60" autocomplete="off">
+      <label for="complaint">Reason for visit</label>
+      <input type="text" id="complaint" maxlength="120" autocomplete="off">
+      <div class="chk"><input type="checkbox" id="emergency"><label for="emergency" style="margin:0">Emergency</label></div>
+      <button id="addBtn">Add to queue</button>
+      <p class="err" id="err" role="alert"></p>
+    </section>
+
+    <section class="card">
+      <h2>Queue</h2>
+      <div class="lane em"><h3>Emergency lane <span id="emCount"></span></h3><div class="chain" id="emChain"></div></div>
+      <div class="lane"><h3>Regular lane <span id="regCount"></span></h3><div class="chain" id="regChain"></div></div>
+      <p class="note">Each box is a linked-list node pointing to the next. The leftmost box is the front (dequeued next); the rightmost is the rear (newest). Emergency patients are always called first.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Recently served</h2>
+    <ol id="history"></ol>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function api(path, body) {
+  const res = await fetch(path, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)} : undefined);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+  return data;
+}
+
+function chain(el, list) {
+  if (!list.length) { el.innerHTML = '<div class="empty">No patients waiting.</div>'; return; }
+  el.innerHTML = list.map((p, i) =>
+    (i ? '<span class="arrow"></span>' : '') +
+    `<div class="pt"><span class="tag">${i === 0 ? 'FRONT' : i === list.length - 1 ? 'REAR' : '&nbsp;'}</span><b>#${p.token} ${esc(p.name)}</b><small>${esc(p.complaint || 'No reason given')}</small></div>`
+  ).join('');
+}
+
+function render(d) {
+  $('waiting').textContent = d.waiting;
+  $('emCount').textContent = d.emergency.length;
+  $('regCount').textContent = d.regular.length;
+  chain($('emChain'), d.emergency);
+  chain($('regChain'), d.regular);
+  $('callBtn').disabled = d.waiting === 0;
+  const last = d.served[0];
+  $('nowToken').textContent = last ? '#' + last.token : '–';
+  $('nowName').textContent = last ? last.name : 'No one yet';
+  $('history').innerHTML = d.served.length
+    ? d.served.map(p => `<li>#${p.token} ${esc(p.name)}${p.emergency ? ' (emergency)' : ''}</li>`).join('')
+    : '<li class="empty" style="list-style:none">Nobody has been served yet.</li>';
+}
+
+async function refresh() { try { render(await api('/api/queue')); } catch (e) {} }
+
+$('addBtn').onclick = async () => {
+  $('err').textContent = '';
+  try {
+    render(await api('/api/enqueue', {
+      name: $('name').value, complaint: $('complaint').value, emergency: $('emergency').checked
+    }));
+    $('name').value = ''; $('complaint').value = ''; $('emergency').checked = false; $('name').focus();
+  } catch (e) { $('err').textContent = e.message; }
+};
+$('callBtn').onclick = async () => {
+  try { render(await api('/api/dequeue', {})); } catch (e) { $('err').textContent = e.message; }
+};
+$('name').addEventListener('keydown', e => { if (e.key === 'Enter') $('addBtn').click(); });
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

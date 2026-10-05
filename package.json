@@ -1,0 +1,9 @@
+{
+  "name": "hospital-queue",
+  "version": "1.0.0",
+  "description": "Hospital patient waiting system built on a hand-written linked-list Queue (DSA project)",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "test": "node test.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "express": "^4.19.2" }
+}
