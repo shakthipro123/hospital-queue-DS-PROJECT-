@@ -2,7 +2,7 @@
 
 A full-stack project demonstrating the **Queue** data structure (FIFO).
 
-**Live demo:** _add your deployed link here_
+https://hospital-queue-ds-project.onrender.com/
 
 ## How the DSA is used
 - `queue.js` is a Queue written from scratch using a **singly linked list** with `head` (front) and `tail` (rear) pointers.
